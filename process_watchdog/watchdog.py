@@ -6,6 +6,9 @@ from typing import Dict, List, Callable, Type
 from logging import getLogger
 
 class AutoInit(type):
+    """
+    metaclass to automatically initialize formal arguments and kwargs 
+    """
     def __new__(meta, classname, supers, classdict):
         def wrapper(old_init):
             def autoinit(self, *args, **kwargs):
@@ -18,9 +21,12 @@ class AutoInit(type):
 
 
 class ManagedTask(metaclass=AutoInit):
+    """
+    Abstract class for tasks managed by the watchdog
+    """
     require_ping = False
 
-    def __init__(self, pipe: multiprocessing.Pipe, *args, **kwargs):
+    def __init__(self, pipe: multiprocessing.Pipe, **kwargs):
         pass
 
     def _run(self):
@@ -32,7 +38,10 @@ class ManagedTask(metaclass=AutoInit):
     def task(self):
         raise NotImplementedError("ManagedTask has no task defined")
 
-def run_task(task: Type[ManagedTask], pipe: multiprocessing.Pipe):
+def _run_task(task: Type[ManagedTask], pipe: multiprocessing.Pipe):
+    """
+    Shim for multiprocessing.Process
+    """
     task_instance = task(pipe)
     task_instance._run()
 
@@ -78,7 +87,7 @@ def watchdog(tasks: List[Type[ManagedTask]], watchdog_timeout=300, logger=None):
                 # Create new task
                 logger.info(f"Starting task {name}")
                 a, b = multiprocessing.Pipe()
-                p = multiprocessing.Process(target=run_task, args=(taskv['task'], b), name=name)
+                p = multiprocessing.Process(target=_run_task, args=(taskv['task'], b), name=name)
                 taskv = {**taskv, 'process': p, 'pipe': a, 'last_seen': time.time()}
                 p.start()
 
